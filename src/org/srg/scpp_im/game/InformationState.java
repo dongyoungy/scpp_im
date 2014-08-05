@@ -1,19 +1,22 @@
 package org.srg.scpp_im.game;
 
-public class InformationState {
+public class InformationState extends GameSetting {
 	
 	private int numGoods;
-	private int[] bidPrice;
+	private int round;
+	private double[] bidPrice;
+	private double[][] bids;
 	private int[] bidWinning;
 	
 	public InformationState(int numGoods)
 	{
 		this.numGoods = numGoods;
-		bidPrice = new int[numGoods];
+		bids = new double[NUM_GOODS][HIERARCHICAL_REDUCTION_LEVEL * NUM_AGENT];
+		bidPrice = new double[numGoods];
 		bidWinning = new int[numGoods];
 	}
 	
-	public int[] getCurrentBidPrice()
+	public double[] getCurrentBidPrice()
 	{
 		return bidPrice;
 	}
@@ -23,7 +26,7 @@ public class InformationState {
 		return bidWinning;
 	}
 	
-	public void setBidPrice(int[] newBidPrice)
+	public void setBidPrice(double[] newBidPrice)
 	{
 		if (newBidPrice.length != numGoods) return;
 		bidPrice = newBidPrice;
@@ -33,5 +36,19 @@ public class InformationState {
 	{
 		if (newBidWinning.length != numGoods) return;
 		bidWinning = newBidWinning;
+	}
+	
+	public void setBids(double[][] newBids)
+	{
+		bids = newBids;
+	}
+	
+	public void setRound(int r)
+	{
+		round = r;
+	}
+	public int getRound()
+	{
+		return round;
 	}
 }

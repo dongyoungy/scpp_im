@@ -1,22 +1,24 @@
 ---
-- OSSCPP_TargetMV
-- OSSCPP_TargetMV
-- OSSCPP_TargetMV
-- OSSCDP_SAASMU
+- OSSCDP_BidEvaluatorMix_E64S512K8
+- OSSCDP_BidEvaluatorMix_E64S512K8
+- OSSCDP_BidEvaluatorMix_E64S512K8
+- OSSCDP_BidEvaluatorMix_E64S512K8
 ---
 game type: "SecondPriceOneShotMarketScheduling"
 dist type: "Original"
 num goods: 5
 num agents: 4
-num iterations: 1
-num simulations: 1
+num iterations: 2
+num simulations: 1000
 num sample: 8
 num scenario: 32
 num candidate bid: 4
+num dist mix: 5
 hierarchical reduction level: 2
 value upper bound: 50
-print debug: "true"
-print output: "true"
+print debug: "false"
+print output: "false"
+enable analyzer: "false"
 update threshold: 0.5
 min point dist to terminate: 0.001
 min distribution dist to terminate: 0.01

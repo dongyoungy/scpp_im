@@ -21,11 +21,14 @@ import org.w3c.dom.NodeList;
 import org.xml.sax.SAXException;
 import org.yaml.snakeyaml.*;
 
+import lpsolve.*;
+
 public class SelfContainedGameRunner extends GameSetting {
 	
 	private static Document dom;
 	private static String game;
 	private static String stratToTrain = "";
+	private static String stratToProduce = "";
 	private static boolean numAgentSpecified = false;
 	private static ArrayList<Strategy> strategies;
 	private static String mode;
@@ -61,6 +64,11 @@ public class SelfContainedGameRunner extends GameSetting {
 		}
 		*/
 		strategies = new ArrayList<Strategy>();
+		
+		if (!mode.equalsIgnoreCase("training") && args.length > 3) {
+			stratToProduce = args[3];
+		}
+		
 		parseSimulationSpecYAML(SIMUL_PATH + "/simulation_spec.yaml");
 		//parseGameSettingXML(fileName);
 		
@@ -90,7 +98,6 @@ public class SelfContainedGameRunner extends GameSetting {
 			}
 			bitVector[i] = bs;
 		}
-		
 		try
 		{
 			Class serverClass = Class.forName("org.srg.scpp_im.game." + game);
@@ -151,8 +158,11 @@ public class SelfContainedGameRunner extends GameSetting {
 			assert GameSetting.NUM_SCENARIO > 0;
 			GameSetting.NUM_CANDIDATE_BID = (int)Double.parseDouble(config.get("num candidate bid").toString());
 			assert GameSetting.NUM_CANDIDATE_BID > 0;
+			//GameSetting.NUM_DIST_MIX = (int)Double.parseDouble(config.get("num dist mix").toString());
+			//assert GameSetting.NUM_DIST_MIX > 0;
 			GameSetting.PRINT_DEBUG = Boolean.parseBoolean(config.get("print debug").toString());
 			GameSetting.PRINT_OUTPUT = Boolean.parseBoolean(config.get("print output").toString());
+			//GameSetting.ENABLE_ANALYZER = Boolean.parseBoolean(config.get("enable analyzer").toString());
 			GameSetting.UPDATE_THRESHOLD = Double.parseDouble(config.get("update threshold").toString());
 			GameSetting.VALUE_UPPER_BOUND = (int)Double.parseDouble(config.get("value upper bound").toString());
 			assert GameSetting.VALUE_UPPER_BOUND > 0;
@@ -177,7 +187,11 @@ public class SelfContainedGameRunner extends GameSetting {
 			for (int i=0;i<NUM_AGENT;i++)
 		    {
 				String strategyName = "";
-				if (!mode.equalsIgnoreCase("training")) strategyName = "org.srg.scpp_im.strategy." + strNames.get(i);
+				if (!mode.equalsIgnoreCase("training")) 
+				{
+					if (stratToProduce.isEmpty()) strategyName = "org.srg.scpp_im.strategy." + strNames.get(i);
+					else strategyName = "org.srg.scpp_im.strategy." + stratToProduce;
+				}
 				else if (mode.equalsIgnoreCase("training")) 
 				{
 					GameSetting.HIERARCHICAL_REDUCTION_LEVEL = 1;

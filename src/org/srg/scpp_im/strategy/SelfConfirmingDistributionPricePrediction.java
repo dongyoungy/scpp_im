@@ -20,11 +20,13 @@ public class SelfConfirmingDistributionPricePrediction extends GameSetting imple
 	protected double[][] prevPrediction;
 	protected double[][] priceObservation;
 	protected double[][] cumulPrediction;
+	protected double[] utilityRecord = new double[NUM_SIMULATION];
 	protected int observationCount;
-	protected int cumulatedUtility = 0;
+	protected double cumulatedUtility = 0.0;
+	protected double cumulatedValue = 0.0;
 	protected BitSet[] bitVector;
 	
-	protected final int prediction_type = DISTRIBUTION;
+	protected int prediction_type = DISTRIBUTION;
 	
 	public SelfConfirmingDistributionPricePrediction(int index)
 	{
@@ -40,9 +42,9 @@ public class SelfConfirmingDistributionPricePrediction extends GameSetting imple
 			for (int j=0;j<BETA+1;j++)
 			{
 				prevPrediction[i][j] = 0;
-				pricePrediction[i][j] = 0;
+				pricePrediction[i][j] = 0.1;
 				priceObservation[i][j] = 0;
-				cumulPrediction[i][j] = 0;
+				cumulPrediction[i][j] = 0.1 * (j+1);
 			}
 		}
 		bitVector = new BitSet[(int)Math.pow(2,NUM_GOODS)];
@@ -124,14 +126,22 @@ public class SelfConfirmingDistributionPricePrediction extends GameSetting imple
 	{
 		return (double)this.cumulatedUtility / (double)this.observationCount;
 	}
-	
-	public int getCurrentSurplus(InformationState s)
+	public double getAverageValue()
 	{
-		int[] currentBid = s.getCurrentBidPrice();
+		return this.cumulatedValue / (double)this.observationCount;
+	}
+	
+	public double[] getUtilityRecord()
+	{
+		return this.utilityRecord;
+	}
+	public double getCurrentSurplus(InformationState s)
+	{
+		double[] currentBid = s.getCurrentBidPrice();
 		int[] currentWinning = s.getCurrentBidWinning();
 		
 		BitSet bs = new BitSet();
-		int cost = 0;
+		double cost = 0.0;
 		for (int i=0;i<NUM_GOODS;i++)
 		{
 			if (currentWinning[i] == index)
@@ -140,10 +150,13 @@ public class SelfConfirmingDistributionPricePrediction extends GameSetting imple
 				cost += currentBid[i];
 			}
 		}
-		int value;
+		double value;
 		value = typeDist.get(bs) != null ? typeDist.get(bs).intValue() : 0;
-		int utility = value - cost;
-		this.cumulatedUtility += utility;
+		double utility = value - cost;
+		//this.cumulatedUtility += utility;
+		
+		cumulatedValue += value;
+		this.utilityRecord[this.observationCount] = utility;
 		return utility;
 	}
 	public void printPrediction()
@@ -194,7 +207,7 @@ public class SelfConfirmingDistributionPricePrediction extends GameSetting imple
 				//System.out.println(pricePrediction[i][j]);
 				prevPrediction[i][j] = pricePrediction[i][j];
 				double diff = priceObservation[i][j] - pricePrediction[i][j];
-				diff = diff * (GameSetting.NUM_ITERATION - currentIt) * 2 / (GameSetting.NUM_ITERATION * 2);
+				diff = diff * (GameSetting.NUM_ITERATION - currentIt)  / (GameSetting.NUM_ITERATION);
 				pricePrediction[i][j] = pricePrediction[i][j] + diff;
 				// 0.1 corresponds infestismal amount mentioned in the paper.
 				// pricePrediction[i][j] = priceObservation[i][j] + 0.1;
@@ -220,6 +233,7 @@ public class SelfConfirmingDistributionPricePrediction extends GameSetting imple
 			}
 		}
 		this.observationCount = 0;
+		this.cumulatedValue = 0;
 		this.cumulatedUtility = 0;
 	}
 	
@@ -259,41 +273,81 @@ public class SelfConfirmingDistributionPricePrediction extends GameSetting imple
 		}
 		return maxDist;
 	}
-	public void addObservation(InformationState s)
+	
+	public double getMaxDist(double[][] pp)
 	{
-		int[] finalPrice = s.getCurrentBidPrice();
+		double maxDist = 0;
+		int discretizedPrice;
+		double[][] pDist = new double[NUM_GOODS][VALUE_UPPER_BOUND+1];
 		
 		for (int i=0;i<NUM_GOODS;i++)
 		{
-			this.priceObservation[i][finalPrice[i]]++;
+			for (int j=0;j<NUM_SIMULATION;j++)
+			{
+				discretizedPrice = (int)Math.round(pp[j][i]);
+				pDist[i][discretizedPrice]++;
+			}
 		}
-		this.observationCount++;
-		this.getCurrentSurplus(s);
+		
+		for (int i=0;i<NUM_GOODS;i++)
+		{
+			double sumPrev = 0;
+			double sumCurrent = 0;
+			for (int j=0;j<BETA+1;j++)
+			{
+				sumCurrent += ((double)pDist[i][j]/(double)NUM_SIMULATION);
+				sumPrev += ((double)pricePrediction[i][j]/(double)NUM_SIMULATION);
+				//System.out.println(sumPrev + " : " + sumCurrent);
+				if (Math.abs(sumCurrent - sumPrev) > Math.abs(maxDist))
+				{
+					maxDist = Math.abs(sumCurrent - sumPrev);
+				}
+			}
+		}
+		return maxDist;
 	}
 	
-	public int[] bid(InformationState s)
+	public void addObservation(InformationState s)
 	{
-		int[] newBid = new int[NUM_GOODS];
-		int[] currentBid = s.getCurrentBidPrice();
+		double[] finalPrice = s.getCurrentBidPrice();
+		int discretizedPrice;
+		for (int i=0;i<NUM_GOODS;i++)
+		{
+			discretizedPrice = (int)Math.round(finalPrice[i]);
+			this.priceObservation[i][discretizedPrice]++;
+		}
+		cumulatedUtility += this.getCurrentSurplus(s);
+		this.observationCount++;
+	}
+	
+	public double[] bid(InformationState s)
+	{
+		
+		double[] newBid = new double[NUM_GOODS];
+		
+		//int[] newBid = new int[NUM_GOODS];
+		double[] currentBid = s.getCurrentBidPrice();
 		int[] currentWinning = s.getCurrentBidWinning();
 		double[] currentPrediction = new double[NUM_GOODS];
 		
 		for (int i=0;i<NUM_GOODS;i++)
 		{
+			int currentBidPrice = (int)Math.floor(currentBid[i]);
 			// in case of winning
 			if (currentWinning[i] == index)
 			{
+				
 				int denomOutbid = 0;
 				int denom = 0;
-				for (int j=currentBid[i];j<VALUE_UPPER_BOUND+1;j++)
+				for (int j=currentBidPrice;j<VALUE_UPPER_BOUND+1;j++)
 				{
 					denomOutbid += this.pricePrediction[i][j];
 					if (j >= currentBid[i]+2) denom += this.pricePrediction[i][j];
 				}
-				double probOutbid = (1.0 - (double)this.pricePrediction[i][currentBid[i]] / (double)denomOutbid);
+				double probOutbid = (1.0 - (double)this.pricePrediction[i][currentBidPrice] / (double)denomOutbid);
 				
 				double sum = 0;
-				for (int j=currentBid[i]+2;j<VALUE_UPPER_BOUND+1;j++)
+				for (int j=currentBidPrice+2;j<VALUE_UPPER_BOUND+1;j++)
 				{
 					sum += (j * (double)this.pricePrediction[i][j]/(double)denom);
 				}
@@ -304,12 +358,12 @@ public class SelfConfirmingDistributionPricePrediction extends GameSetting imple
 			else
 			{
 				int denom = 0;
-				for (int j=currentBid[i]+1;j<VALUE_UPPER_BOUND+1;j++)
+				for (int j=currentBidPrice+1;j<VALUE_UPPER_BOUND+1;j++)
 				{
 					denom += this.pricePrediction[i][j];
 				}
 				double expectedPrice = 0;
-				for (int j=currentBid[i]+1;j<VALUE_UPPER_BOUND+1;j++)
+				for (int j=currentBidPrice+1;j<VALUE_UPPER_BOUND+1;j++)
 				{
 					//expectedPrice += (int)Math.round(((double)j * (double)this.pricePrediction[i][j]/(double)denom));
 					expectedPrice += ((double)j * (double)this.pricePrediction[i][j]/(double)denom);

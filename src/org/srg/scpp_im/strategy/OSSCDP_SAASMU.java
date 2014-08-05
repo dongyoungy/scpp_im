@@ -25,9 +25,10 @@ public class OSSCDP_SAASMU extends SelfConfirmingDistributionPricePrediction {
 	public int[] bid(InformationState s)
 	{
 		int[] newBid = new int[NUM_GOODS];
-		int[] singleGoodValue = new int[NUM_GOODS];
-		int[] priceToBid = new int[NUM_GOODS];
+		//int[] singleGoodValue = new int[NUM_GOODS];
+		//int[] priceToBid = new int[NUM_GOODS];
 		
+		/*
 		for (int i=0;i<NUM_GOODS;i++)
 		{
 			for (BitSet bs : bitVector)
@@ -76,7 +77,7 @@ public class OSSCDP_SAASMU extends SelfConfirmingDistributionPricePrediction {
 				else newBid[i] = 0;
 			}
 		}
-		else
+		else*/
 		{
 			double[] sampleBid = doSAA();
 			for (int i=0;i<NUM_GOODS;i++)
@@ -91,6 +92,8 @@ public class OSSCDP_SAASMU extends SelfConfirmingDistributionPricePrediction {
 	private double[] doSAA()
 	{
 		double[][] scenarios = new double[NUM_SCENARIO][NUM_GOODS];
+		double[] maxBid = new double[NUM_GOODS];
+		BitSet maxBitSet = null;
 		Random ran = new Random();
 		
 		// Sample E scenarios
@@ -104,7 +107,7 @@ public class OSSCDP_SAASMU extends SelfConfirmingDistributionPricePrediction {
 				int pos = Arrays.binarySearch(cumulPrediction[i], dist_num);
 				if (pos >= 0) 
 				{
-					while (cumulPrediction[pos] == cumulPrediction[pos-1])
+					while (cumulPrediction[i][pos] == cumulPrediction[i][pos-1])
 					{
 						pos--;
 					}
@@ -118,7 +121,7 @@ public class OSSCDP_SAASMU extends SelfConfirmingDistributionPricePrediction {
 		}
 		
 		int numSets = (int)Math.pow(2, NUM_GOODS);
-		int numVar = numSets * NUM_SCENARIO;
+		int numVar = numSets; // * NUM_SCENARIO;
 		double[] coeffs = new double[numVar];
 		
 		for (int e=0;e<NUM_SCENARIO;e++)
@@ -129,14 +132,14 @@ public class OSSCDP_SAASMU extends SelfConfirmingDistributionPricePrediction {
 				double value = (double)this.typeDist.get(bs).intValue();
 				double price = 0;
 				
-				for (int k=0;k>NUM_GOODS;k++)
+				for (int k=0;k<NUM_GOODS;k++)
 				{
 					if (bs.get(k))
 					{
 						price += scenarios[e][k];
 					}
 				}
-				coeffs[e*numSets+i] = value - price;
+				coeffs[i] += (value - price);
 			}
 		}
 		
@@ -145,30 +148,124 @@ public class OSSCDP_SAASMU extends SelfConfirmingDistributionPricePrediction {
 			LpSolve solver = LpSolve.makeLp(0, numVar);
 			solver.setObjFn(coeffs);
 			solver.setMaxim();
-			
+			solver.setVerbose(0);
 			// all variables are binary, bid or not.
-			for (int i=0;i<numVar;i++)
+			for (int i=1;i<=numVar;i++)
 			{
 				solver.setBinary(i, true);
 			}
 			
+			double[] constraint = new double[numVar];
+			for (int i=0;i<numSets;i++)
+			{
+				constraint[i] = 1;
+			}
+			solver.addConstraint(constraint, LpSolve.LE, 1);
+			solver.solve();
+			double[] var = solver.getPtrVariables();
+			/*
+			System.out.println("Value of objective function: " + solver.getObjective());
+			double sum = 0;
+		      for (int i = 0; i < var.length; i++) {
+		       // System.out.println("Value of var[" + i + "] = " + var[i]);
+		        sum += var[i];
+		      }
+		    System.out.println("Sum = " + sum);
+		    */
+			int bundleToBid = -1;
+			for (int i=0;i<numSets;i++)
+			{
+				if (var[i] == 1) bundleToBid = i;
+			}
+			
+			for (int i=0;i<NUM_GOODS;i++)
+			{
+				maxBid[i] = 0.0;
+			}
+			
+			if (bundleToBid > 0)
+			{
+				BitSet bs = bitVector[bundleToBid];
+				for (int e=0;e<NUM_SCENARIO;e++)
+				{
+					for (int k=0;k<NUM_GOODS;k++)
+					{
+						if (bs.get(k))
+						{
+							if (maxBid[k] < scenarios[e][k]) maxBid[k] = scenarios[e][k];
+						}
+					}
+				}
+			}
+			/*
 			for (int e=0;e<NUM_SCENARIO;e++)
 			{
-				double[] constraint = new double[numVar];
-				for (int i=e*numSets;i<(e+1)*numSets;i++)
+				for (int i=0;i<numSets;i++)
 				{
-					constraint[i] = 1;
+					if (var[i] > 0)
+					{
+						BitSet bs = bitVector[i];
+						
+						for (int k=0;k<NUM_GOODS;k++)
+						{
+							if (bs.get(k))
+							{
+								if (maxBid[k] < scenarios[e][k]) maxBid[k] = scenarios[e][k];
+							}
+						}
+					}
 				}
-				solver.addConstraint(constraint, LpSolve.LE, 1);
 			}
-			solver.solve();
+			*/
+			/*
+			double maxSurplus = Double.NEGATIVE_INFINITY;
+			
+			for (int i=0;i<numSets;i++)
+			{
+				double totalSurplus = 0;
+				BitSet bs = bitVector[i];
+				for (int e=0;e<NUM_SCENARIO;e++)
+				{
+					boolean win = true;
+					double cost = 0.0;
+					for (int k=0;k<NUM_GOODS;k++)
+					{
+						if (bs.get(k))
+						{
+							cost += scenarios[e][k];
+							if (maxBid[k] < scenarios[e][k]) win = false;
+						}
+					}
+					
+					if (win)
+					{
+						double value = (double)this.typeDist.get(bs).intValue();
+						totalSurplus += (value - cost); 
+					}
+				}
+				if (totalSurplus > maxSurplus)
+				{
+					maxSurplus = totalSurplus;
+					maxBitSet = bs;
+				}
+			}
+			*/
+			double surplus = solver.getObjective();
+			for (int k=0;k<NUM_GOODS;k++)
+			{
+				if (surplus < 0) // || !maxBitSet.get(k))
+				{
+					maxBid[k] = 0;
+				}
+			}
+			
 			solver.deleteLp();
 		}
 		catch (LpSolveException e)
 		{
 			e.printStackTrace();
 		}
-		double[] temp = new double[NUM_GOODS];
-		return temp;
+		//double[] temp = new double[NUM_GOODS];
+		return maxBid;
 	}
 }
